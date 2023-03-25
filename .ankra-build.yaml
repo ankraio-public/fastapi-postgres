@@ -1,0 +1,56 @@
+stages:
+  build:
+    - build
+    - tag_cleanup
+    - tag
+
+variables:
+  VERSION: v0.0.1
+  TARGET: dev
+  GIT_PROVIDER: github
+  GIT_CREDENTIAL: github
+  SERVICE_NAME: my-app
+
+build:
+  target:
+    match:
+      name: $TARGET
+  build:
+    docker:
+      - action: build
+        name: $SERVICE_NAME/$SERVICE_NAME
+        tag: $VERSION
+    helm:
+      - action: package
+        path: $WORKSPACE/helm
+        push: true
+  tag_cleanup:
+    allow_failure: true
+    git:
+      - action: delete_tag
+        provider: $GIT_PROVIDER
+        tag: $VERSION
+        name: config-manager
+        credential: $GIT_CREDENTIAL
+        path: $WORKSPACE
+      - action: push_delete_tag
+        name: config-manager
+        provider: $GIT_PROVIDER
+        credential: $GIT_CREDENTIAL
+        tag: $VERSION
+        path: $WORKSPACE
+  tag:
+    git:
+      - action: tag
+        message: "Config Manager $VERSION"
+        provider: $GIT_PROVIDER
+        tag: $VERSION
+        name: config-manager
+        credential: $GIT_CREDENTIAL
+        path: $WORKSPACE
+      - action: push_tag
+        name: config-manager
+        provider: $GIT_PROVIDER
+        credential: $GIT_CREDENTIAL
+        tag: $VERSION
+        path: $WORKSPACE

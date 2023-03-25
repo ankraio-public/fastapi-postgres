@@ -1,0 +1,73 @@
+stages:
+  predeploy:
+    - prepare
+  dev:
+    - dry-run
+    - deploy
+    
+
+variables:
+  VERSION: v0.0.1
+  TARGET: dev
+  NAMESPACE: my test
+  REPLICA_COUNT: "3"
+  WORKER_REPLICA_COUNT: "3"
+  REGISTRY_USER: robotAccount
+  HELM_NAME: my-app
+  HELM_CHART: helm/
+  HELM_CHART_VERSION: 0.1.1
+  SERVICE_NAME: my-app
+  SERVICE_URL: $SERVICE_NAME.$NAMESPACE.ankra.app
+
+predeploy:
+  target:
+    match:
+      name: $TARGET
+  prepare:
+    secrets:
+      - ORIGIN_KEY
+      - REGISTRY_PASSWORD
+    script:
+      - if [[ ! $(kubectl get ns $NAMESPACE) ]]; then
+          kubectl create ns $NAMESPACE;
+        fi
+      - if [[ ! $(kubectl get secret service-key -n $NAMESPACE) ]]; then
+          kubectl -n $NAMESPACE create secret generic service-key --from-literal key=${ORIGIN_KEY};
+        fi
+      - if [[ ! $(kubectl get secret ankra-regcred -n $NAMESPACE) ]]; then kubectl -n $NAMESPACE create secret docker-registry ankra-regcred --docker-server=registry.infra.ankra.cloud --docker-username=$REGISTRY_USER --docker-password=$REGISTRY_PASSWORD --docker-email=admin@ankra.io; fi
+      - kubectl -n $NAMESPACE apply -f https://artifact.infra.ankra.cloud/repository/ankra-install-public/manifests/origin-issuer.yaml
+
+dev:
+  target:
+    match:
+      name: $TARGET
+  dry-run:
+    helm:
+      - action: add
+        name: common
+        url: https://charts.bitnami.com/bitnami
+      - action: upgrade
+        build_dependencies: true
+        name: $HELM_NAME
+        namespace: $NAMESPACE
+        chart: $WORKSPACE/helm
+        extra_args:
+          - --set image.tag=$VERSION
+          - --dry-run
+  deploy:
+    helm:
+      - action: add
+        name: common
+        url: https://charts.bitnami.com/bitnami
+      - action: upgrade
+        build_dependencies: true
+        name: $HELM_NAME
+        namespace: $NAMESPACE
+        chart: $WORKSPACE/helm
+        extra_args:
+          - --set image.tag=$VERSION
+          - --set fullnameOverride=$HELM_NAME
+          - --set replicaCount=$REPLICA_COUNT
+          - --set ingress.hosts[0].host="$SERVICE_URL"
+          - --set ingress.external_dns.target="lb-$CLUSTER_ID.ankra.dev"
+          - --set commonLabels='ankra.app/external-dns: \"true\"'
