@@ -42,3 +42,5 @@ uvloop==0.16.0
 wcwidth==0.2.5
 websockets==10.0
 wrapt==1.13.3
+gunicorn==20.0.4
+
