@@ -1,3 +1,4 @@
+{{- $fullName := include "my-app.fullname" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -33,6 +34,23 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: DATABASE_URI
+              value: {{ $fullName }}-db.{{ .Release.Namespace }}.svc.cluster.local:5432
+            - name: DB_NAME
+              secretKeyRef:
+                  name: myapp.{{ include "my-app.fullname" . }}-db.credentials.postgresql.acid.zalan.do
+                  key: username
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: myapp.{{ include "my-app.fullname" . }}-db.credentials.postgresql.acid.zalan.do
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: myapp.{{ include "my-app.fullname" . }}-db.credentials.postgresql.acid.zalan.do
+                  key: password
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

@@ -5,7 +5,7 @@ This is a template for a FastAPI + Postgres app. It uses Ankra Platform to docke
 ### pre-requisites
 
   * docker
-  * environment var: DATABASE_URL = postgresql://user:pass@localhost/my-app
+  * environment var: DATABASE_URL = postgresql://user:pass@localhost/myapp
 
 # Building the my-app image
 ### Development image

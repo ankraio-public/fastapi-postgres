@@ -8,8 +8,15 @@ from pytz import timezone as tz
 
 load_dotenv()
 # Database url if none is passed the default one is used
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://user:pass@localhost/my-app")
+USERNAME = os.getenv(
+    "DB_USERNAME", "postgres")
+PASSWORD = os.getenv(
+    "DB_PASSWORD", "")
+DATABASE_URI = os.getenv(
+    "DATABASE_URI", "localhost")
+DB_NAME = os.getenv(
+    "DATABASE_NAME", "myapp")
+DATABASE_URL = f"postgresql://{ USERNAME }:{ PASSWORD }@{DATABASE_URI}/{DB_NAME}"
 
 # SQLAlchemy
 engine = create_engine(DATABASE_URL)

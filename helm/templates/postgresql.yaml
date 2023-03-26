@@ -1,0 +1,29 @@
+{{- $fullName := include "my-app.fullname" . -}}
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: {{ $fullName }}-db
+  namespace: {{ .Release.Namespace }}
+spec:
+  databases:
+    myapp: myapp
+  numberOfInstances: 3
+  patroni:
+    pg_hba:
+    - local  all  all  trust
+    - local  replication     standby     trust
+    - host   all  all 0.0.0.0/0  md5
+    - host   replication  standby 10.0.0.0/8  trust
+  postgresql:
+    parameters:
+      password_encryption: scram-sha-256
+    version: "15"
+  teamId: platform
+  users:
+    myapp:
+    - superuser
+    - createdb
+  volume:
+    size: 5Gi
+status:
+  PostgresClusterStatus: Running
