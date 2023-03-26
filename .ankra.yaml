@@ -1,43 +1,104 @@
 stages:
+  build:
+    - build
+    - tag_cleanup
+    - tag
   predeploy:
-    - prepare
+    - namespace
+    - cloudflare-credentials
+    - cloudflare-issuer
   dev:
     - dry-run
     - deploy
-    
 
 variables:
   VERSION: v0.0.1
   TARGET: dev
-  NAMESPACE: my test
+  BUILD: "false"
+  DEPLOY: "true"
   REPLICA_COUNT: "3"
   WORKER_REPLICA_COUNT: "3"
-  REGISTRY_USER: robotAccount
-  HELM_NAME: my-app
+  NAMESPACE: test
+  HELM_NAME: myapp
   HELM_CHART: helm/
-  HELM_CHART_VERSION: 0.1.1
-  SERVICE_NAME: my-app
-  SERVICE_URL: $SERVICE_NAME.$NAMESPACE.ankra.app
+  GIT_PROVIDER: github
+  GIT_CREDENTIAL: github
+  SERVICE_NAME: myapp
 
-predeploy:
+build:
+  conditions:
+    - when: "$BUILD"
   target:
     match:
       name: $TARGET
-  prepare:
-    secrets:
-      - ORIGIN_KEY
-      - REGISTRY_PASSWORD
+  build:
+    docker:
+      - action: build
+        name: $PROJECT_NAME/$SERVICE_NAME
+        tag: $VERSION
+    helm:
+      - action: package
+        path: $WORKSPACE/helm
+        push: true
+  tag_cleanup:
+    allow_failure: true
+    git:
+      - action: delete_tag
+        provider: $GIT_PROVIDER
+        tag: $VERSION
+        name: $SERVICE_NAME
+        credential: $GIT_CREDENTIAL
+        path: $WORKSPACE
+      - action: push_delete_tag
+        name: $SERVICE_NAME
+        provider: $GIT_PROVIDER
+        credential: $GIT_CREDENTIAL
+        tag: $VERSION
+        path: $WORKSPACE
+  tag:
+    git:
+      - action: tag
+        message: "RSP $VERSION"
+        provider: $GIT_PROVIDER
+        tag: $VERSION
+        name: $SERVICE_NAME
+        credential: $GIT_CREDENTIAL
+        path: $WORKSPACE
+      - action: push_tag
+        name: $SERVICE_NAME
+        provider: $GIT_PROVIDER
+        credential: $GIT_CREDENTIAL
+        tag: $VERSION
+        path: $WORKSPACE
+# Predeploy stage
+predeploy:
+  conditions:
+    - when: "$DEPLOY"
+  target:
+    match:
+      name: $TARGET
+  namespace:
     script:
       - if [[ ! $(kubectl get ns $NAMESPACE) ]]; then
           kubectl create ns $NAMESPACE;
         fi
+  cloudflare-credentials:
+    secrets:
+      - ORIGIN_KEY
+      - REGISTRY_PASSWORD
+    script:
       - if [[ ! $(kubectl get secret service-key -n $NAMESPACE) ]]; then
           kubectl -n $NAMESPACE create secret generic service-key --from-literal key=${ORIGIN_KEY};
         fi
-      - if [[ ! $(kubectl get secret ankra-regcred -n $NAMESPACE) ]]; then kubectl -n $NAMESPACE create secret docker-registry ankra-regcred --docker-server=registry.infra.ankra.cloud --docker-username=$REGISTRY_USER --docker-password=$REGISTRY_PASSWORD --docker-email=admin@ankra.io; fi
+  cloudflare-issuer:
+    script:
+      
+      - if [[ ! $(kubectl get secret ankra-regcred -n $NAMESPACE) ]]; then kubectl -n $NAMESPACE create secret docker-registry ankra-regcred --docker-server=registry.infra.ankra.cloud --docker-username='robot$global' --docker-password=$REGISTRY_PASSWORD --docker-email=admin@ankra.io; fi
       - kubectl -n $NAMESPACE apply -f https://artifact.infra.ankra.cloud/repository/ankra-install-public/manifests/origin-issuer.yaml
-
+# Deploy stage
 dev:
+  conditions:
+    - when: "$DEPLOY"
   target:
     match:
       name: $TARGET
@@ -68,6 +129,10 @@ dev:
           - --set image.tag=$VERSION
           - --set fullnameOverride=$HELM_NAME
           - --set replicaCount=$REPLICA_COUNT
-          - --set ingress.hosts[0].host="$SERVICE_URL"
+          - --set worker.replicaCount=$WORKER_REPLICA_COUNT
+          - --set persistence.accessModes[0]=ReadWriteMany
+          - --set global.environment=prod
+          - --set ingress.hostname="$SERVICE_URL"
           - --set ingress.external_dns.target="lb-$CLUSTER_ID.ankra.dev"
           - --set commonLabels='ankra.app/external-dns: \"true\"'
+          - --set persistence.storageClass="csi-s3"
