@@ -26,7 +26,7 @@ RUN rm -rf __pycache__
 CMD ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "app.main:app", "-b", "0.0.0.0:8000"]
 
 ## Deploy ######################################################################
-FROM python:alpine as deploy
+FROM python:3-alpine3.18 as deploy
 WORKDIR /app
 COPY --from=production /app /app
 RUN apk --no-cache add ca-certificates
